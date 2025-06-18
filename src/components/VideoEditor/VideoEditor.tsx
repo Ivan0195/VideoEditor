@@ -401,11 +401,11 @@ const VideoEditor: FC = () => {
 
     const detectCropHandle = (x: number, y: number): 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | null => {
         if (!cropCanvasRef.current) return null;
-        
+
         const canvas = cropCanvasRef.current;
         const scaleX = canvas.width / originalVideoSize.width;
         const scaleY = canvas.height / originalVideoSize.height;
-        
+
         const handleX = cropArea.x * scaleX;
         const handleY = cropArea.y * scaleY;
         const handleWidth = cropArea.width * scaleX;
@@ -432,7 +432,7 @@ const VideoEditor: FC = () => {
 
     const handleCropStart = (e: React.MouseEvent<HTMLCanvasElement>): void => {
         if (!cropCanvasRef.current) return;
-        
+
         const canvas = cropCanvasRef.current;
         const rect = canvas.getBoundingClientRect();
         const x = e.clientX - rect.left;
@@ -666,7 +666,7 @@ const VideoEditor: FC = () => {
 
     const drawCropArea = (): void => {
         if (!cropCanvasRef.current || !videoContainerRef.current) return;
-        
+
         const canvas = cropCanvasRef.current;
         const container = videoContainerRef.current;
         const ctx = canvas.getContext('2d');
@@ -682,7 +682,7 @@ const VideoEditor: FC = () => {
         // Calculate crop area position and size
         const scaleX = canvas.width / originalVideoSize.width;
         const scaleY = canvas.height / originalVideoSize.height;
-        
+
         const x = cropArea.x * scaleX;
         const y = cropArea.y * scaleY;
         const width = cropArea.width * scaleX;
@@ -703,7 +703,7 @@ const VideoEditor: FC = () => {
         // Draw crop handles
         const handleSize = 12;
         const handleRadius = handleSize / 2;
-        
+
         // Draw handles
         const handles = [
             { x: x - handleRadius, y: y - handleRadius }, // top-left
@@ -736,36 +736,46 @@ const VideoEditor: FC = () => {
 
             {videoUrl && (
                 <div className={styles.playerContainer}>
-                    <div 
-                        ref={videoContainerRef}
-                        className={styles.videoContainer}
-                    >
-                        <video
-                            ref={videoRef}
-                            src={videoUrl}
-                            className={styles.video}
-                            onTimeUpdate={handleTimeUpdate}
-                            onLoadedMetadata={handleLoadedMetadata}
-                            onEnded={() => setIsPlaying(false)}
-                            onLoadedData={() => {
-                                if (videoRef.current && duration > 0) {
-                                    generateThumbnails();
-                                }
-                            }}
-                            controls={false}
-                            style={getCssFilterStyle()}
+                    <div className={styles.videoWithFiltersContainer}>
+                        <div
+                            ref={videoContainerRef}
+                            className={styles.videoContainer}
+                        >
+                            <video
+                                ref={videoRef}
+                                src={videoUrl}
+                                className={styles.video}
+                                onTimeUpdate={handleTimeUpdate}
+                                onLoadedMetadata={handleLoadedMetadata}
+                                onEnded={() => setIsPlaying(false)}
+                                onLoadedData={() => {
+                                    if (videoRef.current && duration > 0) {
+                                        generateThumbnails();
+                                    }
+                                }}
+                                controls={false}
+                                style={getCssFilterStyle()}
+                            />
+                            <canvas
+                                ref={cropCanvasRef}
+                                className={styles.cropCanvas}
+                                onMouseDown={handleCropStart}
+                                onMouseMove={handleCropMove}
+                                onMouseUp={handleCropEnd}
+                                onMouseLeave={handleCropEnd}
+                            />
+                            <canvas ref={thumbnailCanvasRef} style={{ display: 'none' }} />
+                        </div>
+                        <VideoFilters
+                            filters={filters}
+                            onFilterChange={handleFilterChange}
+                            onReset={resetFilters}
+                            onDownload={downloadFilteredVideo}
+                            isProcessing={isProcessing}
+                            ffmpegLoaded={ffmpegLoaded}
+                            activeFilters={activeFilters}
                         />
-                        <canvas
-                            ref={cropCanvasRef}
-                            className={styles.cropCanvas}
-                            onMouseDown={handleCropStart}
-                            onMouseMove={handleCropMove}
-                            onMouseUp={handleCropEnd}
-                            onMouseLeave={handleCropEnd}
-                        />
-                        <canvas ref={thumbnailCanvasRef} style={{ display: 'none' }} />
                     </div>
-
                     <div className={styles.controls}>
                         <button
                             onClick={togglePlayPause}
@@ -842,16 +852,6 @@ const VideoEditor: FC = () => {
                             </button>
                         </div>
                     </div>
-
-                    <VideoFilters
-                        filters={filters}
-                        onFilterChange={handleFilterChange}
-                        onReset={resetFilters}
-                        onDownload={downloadFilteredVideo}
-                        isProcessing={isProcessing}
-                        ffmpegLoaded={ffmpegLoaded}
-                        activeFilters={activeFilters}
-                    />
                 </div>
             )}
         </div>
