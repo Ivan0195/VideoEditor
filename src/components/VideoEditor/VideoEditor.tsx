@@ -2,6 +2,7 @@ import React, {useState, useRef, useEffect, FC} from 'react';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile } from '@ffmpeg/util';
 import styles from './VideoEditor.module.scss'
+import VideoFilters from '../VideoFilters/VideoFilters';
 
 const ffmpeg = new FFmpeg();
 
@@ -239,8 +240,28 @@ const VideoEditor: FC = () => {
             return new Promise<void>((resolve) => {
                 const handleSeeked = () => {
                     try {
-                        ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight,
-                            index * thumbnailWidth, 0, thumbnailWidth, thumbnailHeight);
+                        // Calculate aspect ratio to maintain video proportions
+                        const aspectRatio = video.videoWidth / video.videoHeight;
+                        let drawWidth = thumbnailWidth;
+                        let drawHeight = thumbnailHeight;
+                        let offsetX = 0;
+                        let offsetY = 0;
+
+                        if (aspectRatio > 16/9) {
+                            // Video is wider than 16:9
+                            drawHeight = thumbnailWidth / aspectRatio;
+                            offsetY = (thumbnailHeight - drawHeight) / 2;
+                        } else {
+                            // Video is taller than 16:9
+                            drawWidth = thumbnailHeight * aspectRatio;
+                            offsetX = (thumbnailWidth - drawWidth) / 2;
+                        }
+
+                        ctx.drawImage(
+                            video,
+                            0, 0, video.videoWidth, video.videoHeight,
+                            index * thumbnailWidth + offsetX, offsetY, drawWidth, drawHeight
+                        );
                         video.removeEventListener('seeked', handleSeeked);
                         resolve();
                     } catch (error) {
@@ -268,15 +289,23 @@ const VideoEditor: FC = () => {
         const thumbnailCanvas = thumbnailCanvasRef.current;
         const ctx = timelineCanvas.getContext('2d');
         if (!ctx) return;
-        const displayWidth = timelineCanvas.clientWidth;
-        const displayHeight = timelineCanvas.clientHeight;
+
+        // Set canvas size to match container
+        const container = timelineCanvas.parentElement;
+        if (!container) return;
+        const displayWidth = container.clientWidth;
+        const displayHeight = container.clientHeight;
         timelineCanvas.width = displayWidth;
         timelineCanvas.height = displayHeight;
+
+        // Clear canvas
         ctx.clearRect(0, 0, timelineCanvas.width, timelineCanvas.height);
+
+        // Draw thumbnails
         const thumbnailCount = 10;
         const thumbnailWidth = thumbnailCanvas.width / thumbnailCount;
-        const timelineWidth = timelineCanvas.width;
-        const thumbnailDisplayWidth = timelineWidth / thumbnailCount;
+        const thumbnailDisplayWidth = timelineCanvas.width / thumbnailCount;
+
         for (let i = 0; i < thumbnailCount; i++) {
             ctx.drawImage(
                 thumbnailCanvas,
@@ -284,17 +313,25 @@ const VideoEditor: FC = () => {
                 i * thumbnailDisplayWidth, 0, thumbnailDisplayWidth, timelineCanvas.height
             );
         }
-        const startX = (trimStart / duration) * timelineWidth;
-        const endX = (trimEnd / duration) * timelineWidth;
+
+        // Draw trim area
+        const startX = (trimStart / duration) * timelineCanvas.width;
+        const endX = (trimEnd / duration) * timelineCanvas.width;
         const width = endX - startX;
+
+        // Draw semi-transparent overlay for trim area
         ctx.fillStyle = 'rgba(0, 0, 255, 0.3)';
         ctx.fillRect(startX, 0, width, timelineCanvas.height);
+
+        // Draw trim handles
         const handleWidth = 10;
         const handleHeight = timelineCanvas.height;
         ctx.fillStyle = '#4a90e2';
         ctx.fillRect(startX - handleWidth/2, 0, handleWidth, handleHeight);
         ctx.fillRect(endX - handleWidth/2, 0, handleWidth, handleHeight);
-        const progressX = (currentTime / duration) * timelineWidth;
+
+        // Draw progress indicator
+        const progressX = (currentTime / duration) * timelineCanvas.width;
         ctx.strokeStyle = 'red';
         ctx.lineWidth = 2;
         ctx.beginPath();
@@ -302,6 +339,21 @@ const VideoEditor: FC = () => {
         ctx.lineTo(progressX, timelineCanvas.height);
         ctx.stroke();
     };
+
+    // Add effect to redraw timeline when container size changes
+    useEffect(() => {
+        const resizeObserver = new ResizeObserver(() => {
+            drawTimeline();
+        });
+
+        if (timelineCanvasRef.current?.parentElement) {
+            resizeObserver.observe(timelineCanvasRef.current.parentElement);
+        }
+
+        return () => {
+            resizeObserver.disconnect();
+        };
+    }, []);
 
     const downloadTrimmedVideo = async (): Promise<void> => {
         if (!videoFile || trimEnd <= trimStart || !ffmpegLoaded) return;
@@ -784,129 +836,22 @@ const VideoEditor: FC = () => {
                             <button
                                 onClick={downloadCroppedVideo}
                                 disabled={!ffmpegLoaded || isProcessing}
-                                className={`${styles.actionButton} ${!ffmpegLoaded || isProcessing ? styles.disabledButton : ''}`}
+                                className={`${styles.actionButton} ${(!ffmpegLoaded || isProcessing) ? styles.disabledButton : ''}`}
                             >
                                 {isProcessing ? 'Processing...' : 'Download Cropped Video'}
                             </button>
                         </div>
                     </div>
 
-                    <div className={styles.filtersSection}>
-                        <h3>Video Filters</h3>
-                        <div className={styles.filtersGrid}>
-                            <div className={styles.filterControl}>
-                                <label>Brightness</label>
-                                <input
-                                    type="range"
-                                    min="-1"
-                                    max="1"
-                                    step="0.1"
-                                    value={filters.brightness}
-                                    onChange={(e) => handleFilterChange('brightness', parseFloat(e.target.value))}
-                                />
-                                <span>{filters.brightness}</span>
-                            </div>
-                            <div className={styles.filterControl}>
-                                <label>Contrast</label>
-                                <input
-                                    type="range"
-                                    min="0"
-                                    max="2"
-                                    step="0.1"
-                                    value={filters.contrast}
-                                    onChange={(e) => handleFilterChange('contrast', parseFloat(e.target.value))}
-                                />
-                                <span>{filters.contrast}</span>
-                            </div>
-                            <div className={styles.filterControl}>
-                                <label>Saturation</label>
-                                <input
-                                    type="range"
-                                    min="0"
-                                    max="2"
-                                    step="0.1"
-                                    value={filters.saturation}
-                                    onChange={(e) => handleFilterChange('saturation', parseFloat(e.target.value))}
-                                />
-                                <span>{filters.saturation}</span>
-                            </div>
-                            <div className={styles.filterControl}>
-                                <label>Blur</label>
-                                <input
-                                    type="range"
-                                    min="0"
-                                    max="10"
-                                    step="0.5"
-                                    value={filters.blur}
-                                    onChange={(e) => handleFilterChange('blur', parseFloat(e.target.value))}
-                                />
-                                <span>{filters.blur}</span>
-                            </div>
-                            <div className={styles.filterControl}>
-                                <label>Sepia</label>
-                                <input
-                                    type="range"
-                                    min="0"
-                                    max="1"
-                                    step="0.1"
-                                    value={filters.sepia}
-                                    onChange={(e) => handleFilterChange('sepia', parseFloat(e.target.value))}
-                                />
-                                <span>{filters.sepia}</span>
-                            </div>
-                            <div className={styles.filterControl}>
-                                <label>Grayscale</label>
-                                <input
-                                    type="range"
-                                    min="0"
-                                    max="1"
-                                    step="0.1"
-                                    value={filters.grayscale}
-                                    onChange={(e) => handleFilterChange('grayscale', parseFloat(e.target.value))}
-                                />
-                                <span>{filters.grayscale}</span>
-                            </div>
-                            <div className={styles.filterControl}>
-                                <label>Invert</label>
-                                <input
-                                    type="range"
-                                    min="0"
-                                    max="1"
-                                    step="0.1"
-                                    value={filters.invert}
-                                    onChange={(e) => handleFilterChange('invert', parseFloat(e.target.value))}
-                                />
-                                <span>{filters.invert}</span>
-                            </div>
-                            <div className={styles.filterControl}>
-                                <label>Hue</label>
-                                <input
-                                    type="range"
-                                    min="-180"
-                                    max="180"
-                                    step="1"
-                                    value={filters.hue}
-                                    onChange={(e) => handleFilterChange('hue', parseFloat(e.target.value))}
-                                />
-                                <span>{filters.hue}</span>
-                            </div>
-                        </div>
-                        <div className={styles.filterActions}>
-                            <button
-                                onClick={resetFilters}
-                                className={styles.actionButton}
-                            >
-                                Reset Filters
-                            </button>
-                            <button
-                                onClick={downloadFilteredVideo}
-                                disabled={!ffmpegLoaded || isProcessing || activeFilters.length === 0}
-                                className={`${styles.actionButton} ${(!ffmpegLoaded || isProcessing || activeFilters.length === 0) ? styles.disabledButton : ''}`}
-                            >
-                                {isProcessing ? 'Processing...' : 'Download Filtered Video'}
-                            </button>
-                        </div>
-                    </div>
+                    <VideoFilters
+                        filters={filters}
+                        onFilterChange={handleFilterChange}
+                        onReset={resetFilters}
+                        onDownload={downloadFilteredVideo}
+                        isProcessing={isProcessing}
+                        ffmpegLoaded={ffmpegLoaded}
+                        activeFilters={activeFilters}
+                    />
                 </div>
             )}
         </div>
