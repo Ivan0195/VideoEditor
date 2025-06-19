@@ -1,5 +1,5 @@
 import React, { FC } from 'react';
-import styles from './VideoEditor.module.scss';
+import styles from './VideoControls.module.scss';
 
 interface VideoControlsProps {
     isPlaying: boolean;
@@ -70,4 +70,4 @@ const VideoControls: FC<VideoControlsProps> = ({
     </div>
 );
 
-export default VideoControls; 
+export default VideoControls;

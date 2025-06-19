@@ -4,9 +4,9 @@ import { fetchFile } from '@ffmpeg/util';
 import styles from './VideoEditor.module.scss'
 import VideoFilters from '../VideoFilters/VideoFilters';
 import Timeline from '../Timeline/Timeline';
-import VideoControls from './VideoControls';
 import {Filters} from "@/types/types";
 import {getCssFilterStyle} from "@/utils/helpers";
+import VideoControls from "@/components/VideoControls/VideoControls";
 
 const ffmpeg = new FFmpeg();
 
