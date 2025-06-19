@@ -25,7 +25,7 @@ export default (env: EnvVariables) => {
         mode: env.mode ?? 'development',
         paths,
         analyzer: env.analyzer,
-        platform: env.platform ?? 'desktop'
+        platform: env.platform ?? 'desktop',
     })
 
     return config;

@@ -95,6 +95,7 @@ const VideoEditor: FC = () => {
             setVideoUrl(URL.createObjectURL(file));
             setTrimStart(0);
             setTrimEnd(duration);
+            setCurrentTime(0);
         }
     };
 

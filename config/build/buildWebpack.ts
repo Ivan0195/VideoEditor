@@ -28,7 +28,12 @@ export function buildWebpack(options: BuildOptions): webpack.Configuration {
         experiments: {
             asyncWebAssembly: true,
         },
-        ignoreWarnings: [/Failed to parse source map/],
+        ignoreWarnings: [
+            {
+                module: /@ffmpeg[\\/]ffmpeg[\\/]dist[\\/]esm[\\/]worker.js/,
+                message: /Critical dependency: the request of a dependency is an expression/,
+            },
+        ],
         optimization: {
             moduleIds: 'deterministic',
             runtimeChunk: 'single',
@@ -46,6 +51,6 @@ export function buildWebpack(options: BuildOptions): webpack.Configuration {
             hints: false,
             maxEntrypointSize: 512000,
             maxAssetSize: 512000
-        }
+        },
     }
 }
