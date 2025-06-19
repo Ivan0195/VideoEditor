@@ -3,12 +3,17 @@ import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile } from '@ffmpeg/util';
 import styles from './VideoEditor.module.scss'
 import VideoFilters from '../VideoFilters/VideoFilters';
+import Timeline from '../Timeline/Timeline';
+import VideoControls from './VideoControls';
+import {Filters} from "@/types/types";
+import {getCssFilterStyle} from "@/utils/helpers";
 
 const ffmpeg = new FFmpeg();
 
 const VideoEditor: FC = () => {
 
     const [videoFile, setVideoFile] = useState<File | null>(null);
+    const [isMetadataLoaded, setIsMetadataLoaded] = useState<boolean>(false)
     const [videoUrl, setVideoUrl] = useState<string>('');
     const [isPlaying, setIsPlaying] = useState<boolean>(false);
     const [currentTime, setCurrentTime] = useState<number>(0);
@@ -17,8 +22,6 @@ const VideoEditor: FC = () => {
     const [isMuted, setIsMuted] = useState<boolean>(false);
     const [trimStart, setTrimStart] = useState<number>(0);
     const [trimEnd, setTrimEnd] = useState<number>(0);
-    const [isDragging, setIsDragging] = useState<boolean>(false);
-    const [dragType, setDragType] = useState<'start' | 'end' | null>(null);
     const [isProcessing, setIsProcessing] = useState<boolean>(false);
     const [ffmpegLoaded, setFfmpegLoaded] = useState<boolean>(false);
     const [cropArea, setCropArea] = useState({
@@ -36,7 +39,7 @@ const VideoEditor: FC = () => {
         width: number;
         height: number;
     }>>([]);
-    const [filters, setFilters] = useState({
+    const [filters, setFilters] = useState<Filters>({
         brightness: 0,
         contrast: 1,
         saturation: 1,
@@ -49,7 +52,6 @@ const VideoEditor: FC = () => {
     const [activeFilters, setActiveFilters] = useState<string[]>([]);
 
     const videoRef = useRef<HTMLVideoElement>(null);
-    const timelineCanvasRef = useRef<HTMLCanvasElement>(null);
     const thumbnailCanvasRef = useRef<HTMLCanvasElement>(null);
     const videoContainerRef = useRef<HTMLDivElement>(null);
     const cropCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -110,7 +112,6 @@ const VideoEditor: FC = () => {
     const handleTimeUpdate = (): void => {
         if (videoRef.current) {
             setCurrentTime(videoRef.current.currentTime);
-            drawTimeline();
         }
     };
 
@@ -120,7 +121,6 @@ const VideoEditor: FC = () => {
             setDuration(videoDuration);
             setTrimStart(0);
             setTrimEnd(videoDuration);
-            generateThumbnails();
             const video = videoRef.current;
             setOriginalVideoSize({
                 width: video.videoWidth,
@@ -134,6 +134,7 @@ const VideoEditor: FC = () => {
             };
             setCropArea(initialCrop);
             setCropHistory([initialCrop]);
+            setIsMetadataLoaded(true)
         }
     };
 
@@ -170,170 +171,6 @@ const VideoEditor: FC = () => {
         videoRef.current.currentTime = newTime;
         setCurrentTime(newTime);
     };
-
-    const handleTimelineMouseDown = (e: React.MouseEvent<HTMLCanvasElement>): void => {
-        if (!timelineCanvasRef.current || !videoRef.current) return;
-        const canvas = timelineCanvasRef.current;
-        const rect = canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const timelineWidth = canvas.width;
-        const startX = (trimStart / duration) * timelineWidth;
-        const endX = (trimEnd / duration) * timelineWidth;
-        const handleWidth = 10;
-        if (Math.abs(x - startX) < handleWidth) {
-            setIsDragging(true);
-            setDragType('start');
-        } else if (Math.abs(x - endX) < handleWidth) {
-            setIsDragging(true);
-            setDragType('end');
-        } else {
-            const clickPercentage = x / timelineWidth;
-            const targetTime = clickPercentage * duration;
-            const boundedTime = Math.max(0, Math.min(targetTime, duration));
-            videoRef.current.currentTime = boundedTime;
-            setCurrentTime(boundedTime);
-        }
-    };
-
-    const handleTimelineMouseMove = (e: React.MouseEvent<HTMLCanvasElement>): void => {
-        if (!isDragging || !timelineCanvasRef.current || !videoRef.current) return;
-        const canvas = timelineCanvasRef.current;
-        const rect = canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const timelineWidth = canvas.width;
-        const clickPercentage = x / timelineWidth;
-        const targetTime = clickPercentage * duration;
-        const boundedTime = Math.max(0, Math.min(targetTime, duration));
-        if (dragType === 'start') {
-            setTrimStart(Math.min(boundedTime, trimEnd - 0.1));
-        } else if (dragType === 'end') {
-            setTrimEnd(Math.max(boundedTime, trimStart + 0.1));
-        }
-        drawTimeline();
-    };
-
-    const handleTimelineMouseUp = (): void => {
-        setIsDragging(false);
-        setDragType(null);
-    };
-
-    const generateThumbnails = (): void => {
-        if (!videoRef.current || !thumbnailCanvasRef.current || duration === 0) return;
-        const video = videoRef.current;
-        const canvas = thumbnailCanvasRef.current;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
-        const thumbnailCount = 10;
-        const thumbnailWidth = 160;
-        const thumbnailHeight = 90;
-        canvas.width = thumbnailCount * thumbnailWidth;
-        canvas.height = thumbnailHeight;
-
-        const generateThumbnail = async (index: number) => {
-            video.currentTime = (index / thumbnailCount) * duration;
-
-            return new Promise<void>((resolve) => {
-                const handleSeeked = () => {
-                    try {
-                        const aspectRatio = video.videoWidth / video.videoHeight;
-                        let drawWidth = thumbnailWidth;
-                        let drawHeight = thumbnailHeight;
-                        let offsetX = 0;
-                        let offsetY = 0;
-
-                        if (aspectRatio > 16/9) {
-                            drawHeight = thumbnailWidth / aspectRatio;
-                            offsetY = (thumbnailHeight - drawHeight) / 2;
-                        } else {
-                            drawWidth = thumbnailHeight * aspectRatio;
-                            offsetX = (thumbnailWidth - drawWidth) / 2;
-                        }
-
-                        ctx.drawImage(
-                            video,
-                            0, 0, video.videoWidth, video.videoHeight,
-                            index * thumbnailWidth + offsetX, offsetY, drawWidth, drawHeight
-                        );
-                        video.removeEventListener('seeked', handleSeeked);
-                        resolve();
-                    } catch (error) {
-                        console.error('Error generating thumbnail:', error);
-                        resolve();
-                    }
-                };
-                video.addEventListener('seeked', handleSeeked);
-            });
-        };
-
-        const generateAllThumbnails = async () => {
-            for (let i = 0; i < thumbnailCount; i++) {
-                await generateThumbnail(i);
-            }
-            drawTimeline();
-        };
-
-        generateAllThumbnails();
-    };
-
-    const drawTimeline = (): void => {
-        if (!timelineCanvasRef.current || !thumbnailCanvasRef.current || duration === 0) return;
-        const timelineCanvas = timelineCanvasRef.current;
-        const thumbnailCanvas = thumbnailCanvasRef.current;
-        const ctx = timelineCanvas.getContext('2d');
-        if (!ctx) return;
-        const container = timelineCanvas.parentElement;
-        if (!container) return;
-        const displayWidth = container.clientWidth;
-        const displayHeight = container.clientHeight;
-        timelineCanvas.width = displayWidth;
-        timelineCanvas.height = displayHeight;
-        ctx.clearRect(0, 0, timelineCanvas.width, timelineCanvas.height);
-        const thumbnailCount = 10;
-        const thumbnailWidth = thumbnailCanvas.width / thumbnailCount;
-        const thumbnailDisplayWidth = timelineCanvas.width / thumbnailCount;
-
-        for (let i = 0; i < thumbnailCount; i++) {
-            ctx.drawImage(
-                thumbnailCanvas,
-                i * thumbnailWidth, 0, thumbnailWidth, thumbnailCanvas.height,
-                i * thumbnailDisplayWidth, 0, thumbnailDisplayWidth, timelineCanvas.height
-            );
-        }
-
-        const startX = (trimStart / duration) * timelineCanvas.width;
-        const endX = (trimEnd / duration) * timelineCanvas.width;
-        const width = endX - startX;
-
-        ctx.fillStyle = 'rgba(0, 0, 255, 0.3)';
-        ctx.fillRect(startX, 0, width, timelineCanvas.height);
-        const handleWidth = 10;
-        const handleHeight = timelineCanvas.height;
-        ctx.fillStyle = '#4a90e2';
-        ctx.fillRect(startX - handleWidth/2, 0, handleWidth, handleHeight);
-        ctx.fillRect(endX - handleWidth/2, 0, handleWidth, handleHeight);
-        const progressX = (currentTime / duration) * timelineCanvas.width;
-        ctx.strokeStyle = 'red';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(progressX, 0);
-        ctx.lineTo(progressX, timelineCanvas.height);
-        ctx.stroke();
-    };
-
-    useEffect(() => {
-        const resizeObserver = new ResizeObserver(() => {
-            drawTimeline();
-        });
-
-        if (timelineCanvasRef.current?.parentElement) {
-            resizeObserver.observe(timelineCanvasRef.current.parentElement);
-        }
-
-        return () => {
-            resizeObserver.disconnect();
-        };
-    }, []);
 
     const downloadTrimmedVideo = async (): Promise<void> => {
         if (!videoFile || trimEnd <= trimStart || !ffmpegLoaded) return;
@@ -516,54 +353,6 @@ const VideoEditor: FC = () => {
         }
     };
 
-    const handleFilterChange = (filterName: string, value: number): void => {
-        setFilters(prev => ({
-            ...prev,
-            [filterName]: value
-        }));
-
-        if (value !== 0 && value !== 1) {
-            if (!activeFilters.includes(filterName)) {
-                setActiveFilters(prev => [...prev, filterName]);
-            }
-        } else {
-            setActiveFilters(prev => prev.filter(f => f !== filterName));
-        }
-    };
-
-    const getCssFilterStyle = (): React.CSSProperties => {
-        const cssFilters: string[] = [];
-
-        if (filters.brightness !== 0) {
-            cssFilters.push(`brightness(${1 + filters.brightness})`);
-        }
-        if (filters.contrast !== 1) {
-            cssFilters.push(`contrast(${filters.contrast})`);
-        }
-        if (filters.saturation !== 1) {
-            cssFilters.push(`saturate(${filters.saturation})`);
-        }
-        if (filters.blur > 0) {
-            cssFilters.push(`blur(${filters.blur}px)`);
-        }
-        if (filters.sepia > 0) {
-            cssFilters.push(`sepia(${filters.sepia})`);
-        }
-        if (filters.grayscale > 0) {
-            cssFilters.push(`grayscale(${filters.grayscale})`);
-        }
-        if (filters.invert > 0) {
-            cssFilters.push(`invert(${filters.invert})`);
-        }
-        if (filters.hue !== 0) {
-            cssFilters.push(`hue-rotate(${filters.hue}deg)`);
-        }
-
-        return {
-            filter: cssFilters.join(' ')
-        };
-    };
-
     const downloadFilteredVideo = async (): Promise<void> => {
         if (!videoRef.current || !ffmpeg) return;
 
@@ -624,20 +413,6 @@ const VideoEditor: FC = () => {
         }
     };
 
-    const resetFilters = (): void => {
-        setFilters({
-            brightness: 0,
-            contrast: 1,
-            saturation: 1,
-            blur: 0,
-            sepia: 0,
-            grayscale: 0,
-            invert: 0,
-            hue: 0
-        });
-        setActiveFilters([]);
-    };
-
     useEffect(() => {
         drawCropArea();
     }, [cropArea, originalVideoSize]);
@@ -694,18 +469,18 @@ const VideoEditor: FC = () => {
     };
 
     return (
-        <div className={styles.container}>
-            <div className={styles.fileInputContainer}>
+        <main className={styles.container}>
+            <section className={styles.fileInputContainer} aria-label="File input">
                 <input
                     type="file"
                     accept="video/*"
                     onChange={handleFileChange}
                     className={styles.fileInput}
                 />
-            </div>
+            </section>
 
             {videoUrl && (
-                <div className={styles.playerContainer}>
+                <section className={styles.playerContainer} aria-label="Video player section">
                     <div className={styles.videoWithFiltersContainer}>
                         <div
                             ref={videoContainerRef}
@@ -720,11 +495,11 @@ const VideoEditor: FC = () => {
                                 onEnded={() => setIsPlaying(false)}
                                 onLoadedData={() => {
                                     if (videoRef.current && duration > 0) {
-                                        generateThumbnails();
+                                        setIsMetadataLoaded(true);
                                     }
                                 }}
                                 controls={false}
-                                style={getCssFilterStyle()}
+                                style={getCssFilterStyle(filters)}
                             />
                             <canvas
                                 ref={cropCanvasRef}
@@ -736,95 +511,56 @@ const VideoEditor: FC = () => {
                             />
                             <canvas ref={thumbnailCanvasRef} style={{ display: 'none' }} />
                         </div>
-                        <VideoFilters
-                            filters={filters}
-                            onFilterChange={handleFilterChange}
-                            onReset={resetFilters}
-                            onDownload={downloadFilteredVideo}
+                        <aside aria-label="Video filters">
+                            <VideoFilters
+                                filters={filters}
+                                setActiveFilters={setActiveFilters}
+                                setFilters={setFilters}
+                                onDownload={downloadFilteredVideo}
+                                isProcessing={isProcessing}
+                                ffmpegLoaded={ffmpegLoaded}
+                                activeFilters={activeFilters}
+                            />
+                        </aside>
+                    </div>
+                    <section aria-label="Video controls">
+                        <VideoControls
+                            isPlaying={isPlaying}
+                            onPlayPause={togglePlayPause}
+                            onRewind={rewindVideo}
+                            onForward={forwardVideo}
+                            isMuted={isMuted}
+                            onMute={toggleMute}
+                            volume={volume}
+                            onVolumeChange={handleVolumeChange}
+                            currentTime={currentTime}
+                            duration={duration}
+                            formatTime={formatTime}
+                        />
+                    </section>
+                    <section aria-label="Timeline">
+                        <Timeline
+                            videoUrl={videoUrl}
+                            isMetadataLoaded={isMetadataLoaded}
+                            videoRef={videoRef}
+                            thumbnailCanvasRef={thumbnailCanvasRef}
+                            duration={duration}
+                            currentTime={currentTime}
+                            trimStart={trimStart}
+                            trimEnd={trimEnd}
+                            setTrimStart={setTrimStart}
+                            setTrimEnd={setTrimEnd}
+                            setCurrentTime={setCurrentTime}
+                            formatTime={formatTime}
                             isProcessing={isProcessing}
                             ffmpegLoaded={ffmpegLoaded}
-                            activeFilters={activeFilters}
+                            downloadTrimmedVideo={downloadTrimmedVideo}
+                            downloadCroppedVideo={downloadCroppedVideo}
                         />
-                    </div>
-                    <div className={styles.controls}>
-                        <button
-                            onClick={togglePlayPause}
-                            className={styles.controlButton}
-                        >
-                            {isPlaying ? 'Pause' : 'Play'}
-                        </button>
-                        <button
-                            onClick={rewindVideo}
-                            className={styles.controlButton}
-                        >
-                            -5s
-                        </button>
-                        <button
-                            onClick={forwardVideo}
-                            className={styles.controlButton}
-                        >
-                            +5s
-                        </button>
-                        <button
-                            onClick={toggleMute}
-                            className={styles.controlButton}
-                        >
-                            {isMuted ? 'Unmute' : 'Mute'}
-                        </button>
-                        <div className={styles.volumeContainer}>
-                            <input
-                                type="range"
-                                min={0}
-                                max={1}
-                                step={0.01}
-                                value={volume}
-                                onChange={handleVolumeChange}
-                                className={styles.volume}
-                            />
-                        </div>
-                        <span className={styles.timeDisplay}>
-                            {formatTime(currentTime)} / {formatTime(duration)}
-                        </span>
-                    </div>
-
-                    <div className={styles.timelineSection}>
-                        <div className={styles.timelineContainer}>
-                            <canvas
-                                ref={timelineCanvasRef}
-                                className={styles.timeline}
-                                width={800}
-                                height={80}
-                                onMouseDown={handleTimelineMouseDown}
-                                onMouseMove={handleTimelineMouseMove}
-                                onMouseUp={handleTimelineMouseUp}
-                                onMouseLeave={handleTimelineMouseUp}
-                            />
-                        </div>
-
-                        <div className={styles.trimInfo}>
-                            <span>Trim: {formatTime(trimStart)} - {formatTime(trimEnd)}</span>
-                        </div>
-
-                        <div className={styles.actionButtons}>
-                            <button
-                                onClick={downloadTrimmedVideo}
-                                disabled={trimEnd <= trimStart || !ffmpegLoaded || isProcessing}
-                                className={`${styles.actionButton} ${trimEnd <= trimStart || !ffmpegLoaded || isProcessing ? styles.disabledButton : ''}`}
-                            >
-                                {isProcessing ? 'Processing...' : 'Download Trimmed Video'}
-                            </button>
-                            <button
-                                onClick={downloadCroppedVideo}
-                                disabled={!ffmpegLoaded || isProcessing}
-                                className={`${styles.actionButton} ${(!ffmpegLoaded || isProcessing) ? styles.disabledButton : ''}`}
-                            >
-                                {isProcessing ? 'Processing...' : 'Download Cropped Video'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                    </section>
+                </section>
             )}
-        </div>
+        </main>
     );
 };
 
