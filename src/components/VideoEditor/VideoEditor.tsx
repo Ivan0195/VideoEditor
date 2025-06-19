@@ -19,7 +19,6 @@ const VideoEditor: FC = () => {
     const [trimEnd, setTrimEnd] = useState<number>(0);
     const [isDragging, setIsDragging] = useState<boolean>(false);
     const [dragType, setDragType] = useState<'start' | 'end' | null>(null);
-    const [isFFmpegReady, setIsFFmpegReady] = useState<boolean>(false);
     const [isProcessing, setIsProcessing] = useState<boolean>(false);
     const [ffmpegLoaded, setFfmpegLoaded] = useState<boolean>(false);
     const [cropArea, setCropArea] = useState({
@@ -65,7 +64,6 @@ const VideoEditor: FC = () => {
                     });
                     setFfmpegLoaded(true);
                 }
-                setIsFFmpegReady(true);
             } catch (error) {
                 console.error('Error loading FFmpeg:', error);
             }
@@ -123,8 +121,6 @@ const VideoEditor: FC = () => {
             setTrimStart(0);
             setTrimEnd(videoDuration);
             generateThumbnails();
-
-            // Set initial crop area
             const video = videoRef.current;
             setOriginalVideoSize({
                 width: video.videoWidth,
@@ -235,13 +231,11 @@ const VideoEditor: FC = () => {
         canvas.height = thumbnailHeight;
 
         const generateThumbnail = async (index: number) => {
-            const time = (index / thumbnailCount) * duration;
-            video.currentTime = time;
+            video.currentTime = (index / thumbnailCount) * duration;
 
             return new Promise<void>((resolve) => {
                 const handleSeeked = () => {
                     try {
-                        // Calculate aspect ratio to maintain video proportions
                         const aspectRatio = video.videoWidth / video.videoHeight;
                         let drawWidth = thumbnailWidth;
                         let drawHeight = thumbnailHeight;
@@ -249,11 +243,9 @@ const VideoEditor: FC = () => {
                         let offsetY = 0;
 
                         if (aspectRatio > 16/9) {
-                            // Video is wider than 16:9
                             drawHeight = thumbnailWidth / aspectRatio;
                             offsetY = (thumbnailHeight - drawHeight) / 2;
                         } else {
-                            // Video is taller than 16:9
                             drawWidth = thumbnailHeight * aspectRatio;
                             offsetX = (thumbnailWidth - drawWidth) / 2;
                         }
@@ -290,19 +282,13 @@ const VideoEditor: FC = () => {
         const thumbnailCanvas = thumbnailCanvasRef.current;
         const ctx = timelineCanvas.getContext('2d');
         if (!ctx) return;
-
-        // Set canvas size to match container
         const container = timelineCanvas.parentElement;
         if (!container) return;
         const displayWidth = container.clientWidth;
         const displayHeight = container.clientHeight;
         timelineCanvas.width = displayWidth;
         timelineCanvas.height = displayHeight;
-
-        // Clear canvas
         ctx.clearRect(0, 0, timelineCanvas.width, timelineCanvas.height);
-
-        // Draw thumbnails
         const thumbnailCount = 10;
         const thumbnailWidth = thumbnailCanvas.width / thumbnailCount;
         const thumbnailDisplayWidth = timelineCanvas.width / thumbnailCount;
@@ -315,23 +301,17 @@ const VideoEditor: FC = () => {
             );
         }
 
-        // Draw trim area
         const startX = (trimStart / duration) * timelineCanvas.width;
         const endX = (trimEnd / duration) * timelineCanvas.width;
         const width = endX - startX;
 
-        // Draw semi-transparent overlay for trim area
         ctx.fillStyle = 'rgba(0, 0, 255, 0.3)';
         ctx.fillRect(startX, 0, width, timelineCanvas.height);
-
-        // Draw trim handles
         const handleWidth = 10;
         const handleHeight = timelineCanvas.height;
         ctx.fillStyle = '#4a90e2';
         ctx.fillRect(startX - handleWidth/2, 0, handleWidth, handleHeight);
         ctx.fillRect(endX - handleWidth/2, 0, handleWidth, handleHeight);
-
-        // Draw progress indicator
         const progressX = (currentTime / duration) * timelineCanvas.width;
         ctx.strokeStyle = 'red';
         ctx.lineWidth = 2;
@@ -341,7 +321,6 @@ const VideoEditor: FC = () => {
         ctx.stroke();
     };
 
-    // Add effect to redraw timeline when container size changes
     useEffect(() => {
         const resizeObserver = new ResizeObserver(() => {
             drawTimeline();
@@ -414,7 +393,6 @@ const VideoEditor: FC = () => {
         const handleSize = 12;
         const handleRadius = handleSize / 2;
 
-        // Check each handle
         if (Math.abs(x - handleX) <= handleRadius && Math.abs(y - handleY) <= handleRadius) {
             return 'top-left';
         }
@@ -444,7 +422,6 @@ const VideoEditor: FC = () => {
             e.preventDefault();
             setIsCropping(true);
             setCropHandle(handle);
-            // Save current crop state to history before starting new crop
             setCropHistory(prev => [...prev, cropArea]);
         }
     };
@@ -673,14 +650,11 @@ const VideoEditor: FC = () => {
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        // Set canvas size to match container
         canvas.width = container.clientWidth;
         canvas.height = container.clientHeight;
 
-        // Clear canvas
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // Calculate crop area position and size
         const scaleX = canvas.width / originalVideoSize.width;
         const scaleY = canvas.height / originalVideoSize.height;
 
@@ -689,28 +663,23 @@ const VideoEditor: FC = () => {
         const width = cropArea.width * scaleX;
         const height = cropArea.height * scaleY;
 
-        // Draw semi-transparent overlay
         ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Clear crop area
         ctx.clearRect(x, y, width, height);
 
-        // Draw crop area border
         ctx.strokeStyle = '#4a90e2';
         ctx.lineWidth = 2;
         ctx.strokeRect(x, y, width, height);
 
-        // Draw crop handles
         const handleSize = 12;
         const handleRadius = handleSize / 2;
 
-        // Draw handles
         const handles = [
-            { x: x - handleRadius, y: y - handleRadius }, // top-left
-            { x: x + width - handleRadius, y: y - handleRadius }, // top-right
-            { x: x - handleRadius, y: y + height - handleRadius }, // bottom-left
-            { x: x + width - handleRadius, y: y + height - handleRadius } // bottom-right
+            { x: x - handleRadius, y: y - handleRadius },
+            { x: x + width - handleRadius, y: y - handleRadius },
+            { x: x - handleRadius, y: y + height - handleRadius },
+            { x: x + width - handleRadius, y: y + height - handleRadius }
         ];
 
         handles.forEach(handle => {
