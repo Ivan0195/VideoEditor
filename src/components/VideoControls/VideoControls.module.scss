@@ -46,3 +46,10 @@
   font-family: monospace;
   font-size: 14px;
 }
+
+.actionButtons {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 20px;
+}
