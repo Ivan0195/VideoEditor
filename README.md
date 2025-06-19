@@ -21,11 +21,6 @@ A modern, browser-based video editor built with **React** and **TypeScript**. Tr
 
 ### 1. **Clone the repository**
 
-```bash
-git clone https://github.com/your-username/video-editor.git
-cd video-editor
-```
-
 ### 2. **Install dependencies**
 
 ```bash
