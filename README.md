@@ -111,12 +111,6 @@ A: _Latest versions of Chrome, Firefox, Edge, and Safari are recommended._
 
 ---
 
-## 📝 License
-
-[ISC](./LICENSE) — _Feel free to use, modify, and share!_
-
----
-
 ## 🙏 Acknowledgements
 
 - [FFmpeg](https://ffmpeg.org/) for the amazing open-source video tools.
